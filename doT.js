@@ -24,6 +24,8 @@
 		encode:      /\{\{!([\s\S]+?)\}\}/g,
 		use:         /\{\{#([\s\S]+?)\}\}/g, //compile time evaluation
 		define:      /\{\{##\s*([\w\.$]+)\s*(\:|=)([\s\S]+?)#\}\}/g, //compile time defs
+		defineFun:   /\{\[\s*([\w\.$]+)\s*:([\s\S]+?)]\}/g, //compile time defs using sub-template
+		useFun:      /\{>([\s\S]+?):([\s\S]+?)\<\}/g, //compile time evaluation using sub-template
 		varname: 'it',
 		strip : true,
 		append: true
@@ -50,15 +52,21 @@
 		});
 	}
 
-	doT.template = function(tmpl, c, def) {
-		c = c || doT.templateSettings;
+	doT.template = function(tmpl, cs, def1) {
+		var c = cs || doT.templateSettings;
 		var cstart = c.append ? "'+(" : "';out+=(", // optimal choice depends on platform/size of templates
 		    cend   = c.append ? ")+'" : ");out+='";
+		def = def1 || {};
 		var str = (c.use || c.define) ? resolveDefs(c, tmpl, def || {}) : tmpl;
 
+		var fs = {};
 		str = ("var out='" +
 			((c.strip) ? str.replace(/\s*<!\[CDATA\[\s*|\s*\]\]>\s*|[\r\n\t]|(\/\*[\s\S]*?\*\/)/g, ''): str)
 			.replace(/\\/g, '\\\\')
+			.replace(c.defineFun, function(match, name, value) {
+				fs[name] = doT.template(value, cs, def);
+				return '';
+			})
 			.replace(/'/g, "\\'")
 			.replace(c.interpolate, function(match, code) {
 				return cstart + code.replace(/\\'/g, "'").replace(/\\\\/g,"\\").replace(/[\r\t\n]/g, ' ') + cend;
@@ -70,6 +78,9 @@
 				return "';" + code.replace(/\\'/g, "'").replace(/\\\\/g,"\\").replace(/[\r\t\n]/g, ' ') + "out+='";
 			})
 			+ "';return out;")
+						.replace(c.useFun, function(match, fun, arg) {
+				return cstart + 'fs.' + fun + '(' + arg + ')' + cend;
+			})
 			.replace(/\n/g, '\\n')
 			.replace(/\t/g, '\\t')
 			.replace(/\r/g, '\\r')
@@ -77,7 +88,10 @@
 			.split("var out='';out+=").join('var out=');
 
 		try {
-			return new Function(c.varname, str);
+			var gen = new Function(c.varname, 'fs', str);
+			str = "var f = function(x, fs) {if (x.constructor === Array) {var s = ''; for (var s = '', i = 0, l = x.length; i < l; ++i) s+= gen(x[i],fs); return s} return gen(x,fs);}; f";
+			var fun =  eval(str);
+			return function(arg) {return fun(arg, fs)};
 		} catch (e) {
 			if (typeof console !== 'undefined') console.log("Could not create a template function: " + str);
 			throw e;

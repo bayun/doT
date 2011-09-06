@@ -16,6 +16,14 @@ Features:
 		control whitespace - strip or preserve,
 		streaming friendly
 
+
+Differences between this version and original:
+		foreach implied - if data given to generated template functions is array, function will output concatenation of templates for each array member:
+				doT.template("[{{=it}}]")([1,2,3,4,5]) will return "[1][2][3][4][5]"
+		sub-template definition and usage. With foreach this allows to do repeating sections in one template. Only one level of sub-templates supported. Example:
+				doT.template("{[f:[{{=it}}]]}==={{=it.header}}==={>f:it.array<}")({header: 'Head', array:[1,2,3,4,5]}) will output "===Head===[1][2][3][4][5]"
+		
+
 Benchmarks:
 	jslitmus is used for benchmarking.
 
@@ -52,6 +60,8 @@ Usage:
 		{{! }} for interpolation with encoding,
 		{{# }} for compile-time evaluation/includes and partials,
 		{{## #}} for compile-time defines
+		{[ ]} for sub-template definition
+		{><} for sub-template use
 
 	Other delimiters may be configured.
 
@@ -69,6 +79,7 @@ Usage:
 Note about doU.js:
 	doU.js is here only so that legacy extrenal tests do not break. Use doT.js.
 	doT.js with doT.templateSettings.append=false provides the same performance as doU.js.
+
 
 License:
 	doT is an open source component of http://bebedo.com
